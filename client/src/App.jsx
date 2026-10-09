@@ -8,7 +8,7 @@ import Bookmarks from "./pages/Bookmarks.jsx";
 export default function App() {
   return (
     <CourtsProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/DinkSync">
         {/* <DemoNotice /> */}
         <Routes>
           <Route path="/" element={<Landing />} />
