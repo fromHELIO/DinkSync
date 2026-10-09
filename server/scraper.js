@@ -479,8 +479,12 @@ function toAvailability(result, window) {
 let browserPromise = null;
 async function launchBrowser() {
   return puppeteer.launch({
-    headless: process.env.PUPPETEER_HEADFUL ? false : true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true,
+    args: ['--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--disable-gpu'],
   });
 }
 
