@@ -1,6 +1,8 @@
-// The real client. Every function here talks to YOUR Express API.
-
-const BASE = import.meta.env.VITE_API_BASE_URL || ''
+const BASE = import.meta.env.VITE_API_BASE_URL || (
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:3000'
+    : 'https://dinksync-backend.onrender.com' // Replace with your actual Render backend URL
+);
 
 async function request(path, options) {
   const response = await fetch(`${BASE}${path}`, {
