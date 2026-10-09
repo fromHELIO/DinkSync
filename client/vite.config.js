@@ -8,7 +8,7 @@ import react from '@vitejs/plugin-react'
 // what goes wrong without this: a blank white page and 404s on every asset.
 export default defineConfig({
   plugins: [react()],
-  base: process.env.VITE_BASE_PATH || '/',
+  base: '/DinkSync/',
   server: {
     // Only used by `npm run dev`. It is NOT part of the production build, which
     // is why the deployed site needs CORS and this does not. See page 8.
