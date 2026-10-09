@@ -14,11 +14,7 @@ A personal project designed for easily navigating to the courts I regularly visi
 - Shows availability for specified times (if capable)
 
 ## Built with
-
-React and Vite on the front end, Express and PostgreSQL on the back end. The
-client is on GitHub Pages, the API on (host), the database on (host).
-
-React and Vite for the frontend. Express, PostgreSQL, and good old JSX for the backend. Client is hosted on Github Pages, the API on Render, and the database on Supabase.
+React and Vite for the frontend. Express good old JSX for the backend. Client is hosted on Github Pages andthe API on Render.
 
 ## Architecture
 
