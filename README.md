@@ -30,3 +30,5 @@ The client talks to the server, which itself talks to the database– a classic 
 - Account system for use beyond just myself
 - More robust availability searching to cover apps beyond those covered by Rezerv and Coura
 
+## AI CREDIT
+This site was made possible with the assistance of Artificial Intelligence Tools (AI), notably Claude and Gemini. Please view AI_USAGE.md for additional information.
