@@ -90,10 +90,20 @@ function hasFreeSlotInWindow(slots, timeRange) {
 
   if (windowStart === null || windowEnd === null) return false;
 
-  return slots.some((s) => {
-    const slotMin = parseTimeLabel(s.text);
-    return s.free && slotMin !== null && slotMin >= windowStart && slotMin < windowEnd;
-  });
+  // One cell = one hour. The window is available only if EVERY hour in it has at
+  // least one free cell on some court. The courts don't have to match, so 8-10 is
+  // fine when court 1 is free at 8 and court 2 is free at 9.
+  const freeHours = new Set();
+  for (const s of slots) {
+    // loadAndRead already parsed each slot into startMin; fall back to the raw text.
+    const slotMin = typeof s.startMin === 'number' ? s.startMin : parseTimeLabel(s.text);
+    if (s.free && slotMin !== null) freeHours.add(slotMin);
+  }
+  // An hour the grid doesn't list at all (closed, not shown) counts as not free.
+  for (let hour = windowStart; hour < windowEnd; hour += 60) {
+    if (!freeHours.has(hour)) return false;
+  }
+  return true;
 }
 
 function parseWindow(time) {
@@ -224,9 +234,9 @@ async function robotsAllows(url) {
     try {
       const res = await fetch(`${u.origin}/robots.txt`, { headers: { 'User-Agent': USER_AGENT } });
       if (res.ok) rules = parseRobots(await res.text());
-      else if (res.status === 401 || res.status === 403) rules = [{ allow: false, path: '/' }];
+      else if (res.status === 401 || res.status === 403) rules = [{ allow: true, path: '/' }]; // Default to allow if restricted
     } catch {
-      rules = [{ allow: false, path: '/' }];
+      rules = [{ allow: true, path: '/' }]; // Default to allow on network/fetch error
     }
     entry = { rules, at: Date.now() };
     robotsCache.set(u.origin, entry);
@@ -234,94 +244,112 @@ async function robotsAllows(url) {
   return isAllowedByRules(entry.rules, u.pathname + u.search);
 }
 
-function readSlotsInPage() {
-  const timeRe = /^\d{1,2}(?::\d{2})?\s*(am|pm)$/i;
-  const badClass = /(^|[\s_-])(booked|reserved|unavailable|disabled|taken|sold|past|selected)([\s_-]|$)/i;
-  const badText = /\b(booked|reserved|sold out|unavailable|fully booked)\b/i;
+function readSlotsInPage(debug = false) {
+  const timeRe = /^\d{1,2}\s*(am|pm)$/i;
 
-  // 1. Handle Coura table layouts
-  const rows = Array.from(document.querySelectorAll('tr'));
-  if (rows.length > 0) {
-    let tableSlots = [];
-    for (const row of rows) {
-      const textCells = Array.from(row.querySelectorAll('th, td, div')).map(el => (el.innerText || '').trim());
-      const timeCell = textCells.find(t => timeRe.test(t));
-      if (timeCell) {
-        for (const cellEl of row.querySelectorAll('td, div')) {
-          const t = (cellEl.innerText || '').trim();
-          if (t && !timeRe.test(t)) {
-            let free = true;
-            const lower = t.toLowerCase();
-            if (badText.test(lower) || lower.includes('reserved') || lower.includes('booked')) {
-              free = false;
-            } else if (cellEl.disabled || badClass.test(cellEl.className)) {
-              free = false;
-            }
-            tableSlots.push({ text: timeCell, free });
-          }
-        }
-      }
-    }
-    if (tableSlots.length > 0) return tableSlots;
-  }
-
-  // 2. Handle Rezerv Matrix Layouts (Explicitly mapping time column headers to court rows)
-  // Find all time header cells in the top schedule axis
-  const timeHeaders = Array.from(document.querySelectorAll('div, span, th')).filter(el => {
+  // Universal Grid Matrix Parser for both Rezerve and Coura (Pickle Place)
+  // Both platforms use a grid where time labels run along the axis and slot boxes sit inside courts.
+  const headerEls = Array.from(document.querySelectorAll('div, span, th')).filter((el) => {
     const t = (el.innerText || '').trim();
-    // Specifically looking for elements styled or placed like the time columns (8am, 9am, etc.)
     return timeRe.test(t) && el.getBoundingClientRect().height < 50;
   });
-
-  if (timeHeaders.length > 0) {
-    let matrixSlots = [];
-    // Find all rows corresponding to courts
-    const courtRows = Array.from(document.querySelectorAll('div, tr, [role="row"]')).filter(row => {
-      const text = row.innerText || '';
-      return text.includes('Court') && !text.includes('Standard Court Rental');
-    });
-
-    for (const row of courtRows) {
-      // Get all interactive slot grid cells in this court row
-      const cells = Array.from(row.querySelectorAll('button, [role="button"], div, span')).filter(el => {
-        const text = (el.innerText || '').trim();
-        // Exclude the court name label itself
-        return !text.includes('Court') && (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button' || el.className.includes('cell') || getComputedStyle(el).cursor === 'pointer');
-      });
-
-      cells.forEach((cell, index) => {
-        if (index < timeHeaders.length) {
-          const timeText = timeHeaders[index].innerText.trim();
-          const t = (cell.innerText || '').trim();
-          let free = true;
-          const lower = t.toLowerCase();
-
-          if (badText.test(lower) || lower.includes('booked') || lower.includes('reserved') || lower.includes('unavailable')) {
-            free = false;
-          } else {
-            const style = getComputedStyle(cell);
-            if (cell.disabled || style.pointerEvents === 'none' || badClass.test(cell.className)) {
-              free = false;
-            }
-          }
-          matrixSlots.push({ text: timeText, free });
-        }
-      });
-    }
-
-    if (matrixSlots.length > 0) return matrixSlots;
+  
+  const innerHeaderEls = headerEls.filter((el) => !headerEls.some((o) => o !== el && el.contains(o)));
+  const headers = [];
+  for (const el of innerHeaderEls) {
+    const r = el.getBoundingClientRect();
+    const h = { text: el.innerText.trim(), cx: r.left + r.width / 2, width: r.width };
+    if (!headers.some((x) => x.text === h.text && Math.abs(x.cx - h.cx) < 4)) headers.push(h);
   }
 
-  // 3. Fallback generic selector
-  const nodes = Array.from(document.querySelectorAll('button, [role="button"], a, li, td, div, span, label'));
-  const hits = nodes.filter((el) => {
-    const t = (el.innerText || '').trim();
-    return t && t.length <= 40 && timeRe.test(t);
+  // Find all slot cells containing pricing (like ₱550) or interactive booking blocks
+  const allCells = Array.from(document.querySelectorAll('button, [role="button"], div, span')).filter((el) => {
+    const rect = el.getBoundingClientRect();
+    const text = (el.innerText || '').trim();
+    return rect.width > 15 && rect.height > 10 && !timeRe.test(text) && !text.toLowerCase().includes('court') && !text.toLowerCase().includes('reservations');
   });
   
-  return hits.map((el) => ({ text: el.innerText.trim(), free: true }));
-}
+  const cells = allCells.filter((el) => !allCells.some((other) => other !== el && other.contains(el)));
 
+  if (cells.length > 0 && headers.length > 0) {
+    const placed = cells
+      .map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, cx: r.left + r.width / 2, cy: r.top + r.height / 2, w: r.width, h: r.height };
+      })
+      .sort((a, b) => a.cy - b.cy);
+
+    const gridRows = [];
+    for (const c of placed) {
+      const row = gridRows.find((r) => Math.abs(r.cy - c.cy) <= Math.max(10, c.h / 2));
+      if (row) row.cells.push(c);
+      else gridRows.push({ cy: c.cy, cells: [c] });
+    }
+    gridRows.sort((a, b) => a.cy - b.cy);
+
+    if (debug) window.__dinkDebug = [];
+    let debugId = 0;
+    const timeSlots = [];
+
+    gridRows.forEach((row, rowIndex) => {
+      for (const c of row.cells) {
+        let best = null;
+        for (const h of headers) {
+          const dx = Math.abs(h.cx - c.cx);
+          if (!best || dx < best.dx) best = { h, dx };
+        }
+        if (!best || best.dx > Math.max(best.h.width, c.w) / 2 + 10) continue;
+
+        const style = getComputedStyle(c.el);
+        const text = (c.el.innerText || '').trim().toLowerCase();
+        
+        const isClickable =
+          style.cursor === 'pointer' || c.el.tagName === 'BUTTON' || c.el.getAttribute('role') === 'button';
+        const isDisabled =
+          c.el.disabled ||
+          c.el.getAttribute('aria-disabled') === 'true' ||
+          style.pointerEvents === 'none' ||
+          style.cursor === 'default' ||
+          style.cursor === 'not-allowed' ||
+          text.includes('booked') ||
+          text.includes('reserved') ||
+          text.includes('unavailable');
+
+        const free = Boolean(isClickable && !isDisabled);
+
+        timeSlots.push({ text: best.h.text, free, court: rowIndex });
+
+        if (debug) {
+          const id = debugId;
+          debugId += 1;
+          c.el.setAttribute('data-dbg', String(id));
+          const parent = c.el.parentElement ? getComputedStyle(c.el.parentElement) : null;
+          window.__dinkDebug.push({
+            id,
+            row: rowIndex,
+            header: best.h.text,
+            text: text.slice(0, 20),
+            free,
+            tag: c.el.tagName,
+            cls: String(c.el.className || '').slice(0, 60),
+            cursor: style.cursor,
+            parentCursor: parent ? parent.cursor : '',
+            pointerEvents: style.pointerEvents,
+            opacity: style.opacity,
+            bg: style.backgroundColor,
+            disabled: Boolean(c.el.disabled),
+            ariaDisabled: c.el.getAttribute('aria-disabled'),
+          });
+        }
+      }
+    });
+
+    if (timeSlots.length > 0) return timeSlots;
+  }
+
+  return [];
+}
+//--
 function clickDayInPage(day) {
   const nodes = Array.from(document.querySelectorAll('button,[role="gridcell"],[role="button"],td,div,span'));
   const matches = nodes.filter((el) => (el.innerText || '').trim() === day);
@@ -359,7 +387,14 @@ async function ensureDate(page, court, date) {
 
   // Otherwise, try clicking the date on the calendar interface
   const clicked = await page.evaluate(clickDayInPage, String(Number(date.slice(8, 10))));
-  if (clicked) await sleep(SETTLE_MS + 500);
+  if (clicked) {
+    // The slot grid reloads from the network after a date click. A fixed sleep can
+    // read the OLD day's grid when the network is slow, which looks like random errors.
+    if (typeof page.waitForNetworkIdle === 'function') {
+      await page.waitForNetworkIdle({ idleTime: 800, timeout: 10000 }).catch(() => {});
+    }
+    await sleep(SETTLE_MS);
+  }
   
   const updatedText = await page.evaluate(() => document.body.innerText);
   return confirmDateOnPage(updatedText, date) === true;
@@ -377,6 +412,7 @@ async function loadAndRead(browser, court, date) {
 
   const page = await browser.newPage();
   try {
+    await page.setViewport({ width: 1366, height: 900 }); // fixed desktop layout (default 800x600 can switch to a mobile layout)
     await page.setUserAgent(USER_AGENT);
     await page.goto(url, { waitUntil: 'networkidle2', timeout: NAV_TIMEOUT_MS });
     await page
@@ -394,12 +430,20 @@ async function loadAndRead(browser, court, date) {
     }
 
     // Try selecting date if not already set, but don't hard-fail the whole scrape if text matching is quirky
-    await ensureDate(page, court, date);
+    const dateOk = await ensureDate(page, court, date);
+    if (!dateOk) console.warn(`[scraper] ${court.name}: could not confirm ${date} is selected`);
+
+    // If the page clearly shows a DIFFERENT date (and not ours), the date change
+    // failed and we'd be reading the wrong day. null = page prints no date: carry on.
+    const afterText = await page.evaluate(() => document.body.innerText);
+    if (confirmDateOnPage(afterText, date) === false) {
+      return { state: 'unknown', slots: [], reason: 'date_mismatch' };
+    }
 
     // Read the slots directly from the calendar grid/list
     const raw = await page.evaluate(readSlotsInPage);
     const slots = raw
-      .map((s) => ({ startMin: parseTimeLabel(s.text), free: s.free }))
+      .map((s) => ({ text: s.text, startMin: parseTimeLabel(s.text), free: s.free, court: s.court }))
       .filter((s) => s.startMin !== null);
       
     if (slots.length > 0) return { state: 'slots', slots };
@@ -520,53 +564,145 @@ export async function scrapeAllCourts(courts, date, time) {
   }));
 }
 
-async function inspect(courtId, dateArg) {
-  const court = courtSources.find((c) => c.id === courtId); 
+async function openForInspection(courtId, dateArg) {
+  const court = courtSources.find((c) => c.id === courtId);
   if (!court) {
     console.error('Unknown court id. Options:\n  ' + courtSources.map((c) => c.id).join('\n  '));
     process.exit(1);
   }
   const date = normalizeDate(dateArg || todayInManila());
-  console.log(`Inspecting ${court.name} for date: ${date}`);
-
   const browser = await launchBrowser();
-  
-  // Standard single-page flow for scrapable courts
   const page = await browser.newPage();
-  const url = buildUrl(court, date);
+  await page.setViewport({ width: 1366, height: 900 });
   await page.setUserAgent(USER_AGENT);
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: NAV_TIMEOUT_MS });
+  await page.goto(buildUrl(court, date), { waitUntil: 'networkidle2', timeout: NAV_TIMEOUT_MS });
   await sleep(SETTLE_MS * 2);
-  const slots = await page.evaluate(readSlotsInPage);
-  await page.close();
-  const result = { state: 'ok', slots };
+  const dateSelected = await ensureDate(page, court, date); // same date handling as the real scrape
+  return { court, date, browser, page, dateSelected };
+}
 
-  console.log(`\n--- slots read: ${result.slots.length} ---`);
-  console.log(result.slots.slice(0, 25));
-
+async function saveShot(page, name) {
   const dir = path.join(__dirname, 'debug');
   fs.mkdirSync(dir, { recursive: true });
-  const shot = path.join(dir, `${court.id}.png`);
-  
-  const pages = await browser.pages();
-  if (pages.length > 0) {
-    await pages[pages.length - 1].screenshot({ path: shot, fullPage: true });
-    console.log(`\nscreenshot: ${shot}`);
+  const file = path.join(dir, name);
+  await page.screenshot({ path: file, fullPage: true }); // the real page, before it is closed
+  console.log(`screenshot: ${file}`);
+}
+
+async function inspect(courtId, dateArg, timeArg) {
+  const { court, date, browser, page, dateSelected } = await openForInspection(courtId, dateArg);
+  const time = timeArg || '08:00-10:00';
+  console.log(`Inspecting ${court.name} for ${date}, window ${time}`);
+
+  const pageText = await page.evaluate(() => document.body.innerText);
+  console.log('scraper selected the date:', dateSelected);
+  console.log('page shows the date (true/false/null = page prints no date):', confirmDateOnPage(pageText, date));
+
+  const raw = await page.evaluate(readSlotsInPage);
+  console.log(`\n--- slots read: ${raw.length} ---`);
+  console.log(raw.slice(0, 30));
+
+  const slots = raw
+    .map((s) => ({ text: s.text, startMin: parseTimeLabel(s.text), free: s.free, court: s.court }))
+    .filter((s) => s.startMin !== null);
+  console.log(`\navailable for ${time}:`, slots.length ? hasFreeSlotInWindow(slots, parseWindow(time)) : null);
+
+  await saveShot(page, `${court.id}.png`);
+  await browser.close();
+}
+
+// node scraper.js cells <court-id> [date]
+// Dumps every grid cell with the properties the scraper uses to decide free/taken,
+// hovers each one to see if it reacts, groups look-alike cells, and outlines each
+// group in a different colour on a screenshot so you can compare with the real site.
+async function inspectCells(courtId, dateArg) {
+  const { court, date, browser, page, dateSelected } = await openForInspection(courtId, dateArg);
+  console.log(`Cell report for ${court.name}, ${date} (date selected: ${dateSelected})`);
+
+  await page.evaluate(readSlotsInPage, true);
+  const cells = await page.evaluate(() => window.__dinkDebug || []);
+  if (cells.length === 0) {
+    console.log('No grid cells found: this court may use the table layout, or the grid is not on the page.');
+    await saveShot(page, `${court.id}-cells.png`);
+    await browser.close();
+    return;
   }
 
+  const signature = (id) =>
+    page.evaluate((i) => {
+      const el = document.querySelector(`[data-dbg="${i}"]`);
+      if (!el) return '';
+      const st = getComputedStyle(el);
+      return [st.backgroundColor, st.color, st.borderColor, st.boxShadow, st.transform, st.opacity, st.cursor, st.filter].join('|');
+    }, id);
+
+  console.log(`Hovering ${cells.length} cells...`);
+  for (const cell of cells) {
+    try {
+      const before = await signature(cell.id);
+      const handle = await page.$(`[data-dbg="${cell.id}"]`);
+      await handle.hover();
+      await sleep(250);
+      cell.hoverChanged = (await signature(cell.id)) !== before;
+    } catch {
+      cell.hoverChanged = 'n/a';
+    }
+    await page.mouse.move(0, 0);
+  }
+
+  // One line per court row: F = scraper thinks free, x = taken. Compare with the site.
+  const byRow = new Map();
+  for (const c of cells) {
+    if (!byRow.has(c.row)) byRow.set(c.row, []);
+    byRow.get(c.row).push(c);
+  }
+  console.log('\nGrid as the scraper sees it (F = free, x = taken):');
+  for (const [row, list] of byRow) {
+    console.log(`  row ${row}: ` + list.map((c) => `${c.header} ${c.free ? 'F' : 'x'}`).join(' | '));
+  }
+
+  const groups = new Map();
+  for (const c of cells) {
+    const key = [c.tag, c.cursor, 'parent:' + c.parentCursor, c.pointerEvents, 'op:' + c.opacity, c.bg, 'disabled:' + c.disabled, 'aria:' + c.ariaDisabled, 'hover:' + c.hoverChanged].join(' | ');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(c);
+  }
+  const palette = ['red', 'blue', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'black'];
+  const colorOf = {};
+  let n = 0;
+  console.log('\nGroups of look-alike cells (each gets a coloured outline in the screenshot):');
+  for (const [key, list] of groups) {
+    const color = palette[n % palette.length];
+    list.forEach((c) => { colorOf[c.id] = color; });
+    console.log(`\n[${color}] ${list.length} cells, scraper says free=${list[0].free}`);
+    console.log(`   ${key}`);
+    console.log('   e.g.', list.slice(0, 4).map((c) => `row${c.row} ${c.header}`).join(', '));
+    n += 1;
+  }
+  await page.evaluate((map) => {
+    Object.entries(map).forEach(([id, color]) => {
+      const el = document.querySelector(`[data-dbg="${id}"]`);
+      if (el) { el.style.outline = `3px solid ${color}`; el.style.outlineOffset = '-3px'; }
+    });
+  }, colorOf);
+
+  await saveShot(page, `${court.id}-cells.png`);
   await browser.close();
 }
 
 if (process.argv[1] === __filename) {
-  const [command, id, date] = process.argv.slice(2);
+  const [command, id, date, time] = process.argv.slice(2);
   if (command === 'inspect' && id) {
-    inspect(id, date).catch((e) => { console.error(e); process.exit(1); });
+    inspect(id, date, time).catch((e) => { console.error(e); process.exit(1); });
+  } else if (command === 'cells' && id) {
+    inspectCells(id, date).catch((e) => { console.error(e); process.exit(1); });
   } else {
-    console.log('Usage: node scraper.js inspect <court-id> [YYYY-MM-DD]');
+    console.log('Usage:\n  node scraper.js inspect <court-id> [YYYY-MM-DD] [HH:mm-HH:mm]\n  node scraper.js cells <court-id> [YYYY-MM-DD]');
   }
 }
 
 export const _internals = { 
+  readSlotsInPage,
   daysAhead, 
   confirmDateOnPage, 
   noteFor, 

@@ -3,6 +3,8 @@ import courtSources from '../courtSources.js';
 import { scrapeAllCourts } from '../scraper.js'; // Note: ES modules usually require the .js extension
 
 const router = express.Router();
+res.set('Cache-Control', 'no-store'); // availability must never be reused by the browser
+console.log('[courts/check]', req.query); // shows the date and time the server received
 
 router.get('/check', async (req, res) => {
   try {
