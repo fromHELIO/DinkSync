@@ -10,7 +10,10 @@
 import * as mockApi from './mockApi.js'
 import * as httpApi from './httpApi.js'
  
-export const USING_MOCK_API = import.meta.env.VITE_USE_MOCK_API !== 'false'
+// Force it to false when running on GitHub Pages (or use your own hostname check)
+export const USING_MOCK_API = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' 
+  ? false 
+  : (import.meta.env.VITE_USE_MOCK_API !== 'false');
  
 const implementation = USING_MOCK_API ? mockApi : httpApi
  
