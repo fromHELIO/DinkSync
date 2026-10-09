@@ -21,6 +21,7 @@ try {
   console.log(`ran ${file}`)
 } catch (error) {
   console.error(`failed on ${file}: ${error.message}`)
+  console.error('FULL ERROR DETAILS:', error) // <-- Add this line
   process.exitCode = 1
 } finally {
   await pool.end()

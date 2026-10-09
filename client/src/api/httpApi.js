@@ -38,3 +38,10 @@ export const setBookmark = (id, bookmarked) =>
     method: 'POST',
     body: JSON.stringify({ bookmarked }),
   })
+
+  // Add this to client/src/api/httpApi.js
+
+  export const fetchCourtAvailability = (date, time) => {
+    const query = new URLSearchParams({ date, time }).toString()
+    return request(`/api/courts/check?${query}`)
+  }

@@ -1,27 +1,45 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { listCourts, setBookmark } from "../api/index.js";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { fetchCourtAvailability, setBookmark } from "../api/index.js";
+import { todayISO } from "../utils/dateTime.js";
 
 const CourtsContext = createContext(null);
 
-// Edit these defaults, or wire them to real inputs later.
-const DEFAULT_SEARCH = { date: "2026/10/05", timeRange: "07:00-09:00" };
+const initialSearch = () => ({ date: todayISO(), timeRange: "15:00-17:00" });
 
 export function CourtsProvider({ children }) {
-  const [courts, setCourts] = useState([]);
-  const [search, setSearch] = useState(DEFAULT_SEARCH);
+  const [rawCourts, setRawCourts] = useState([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState(() => new Set());
+  const [search, setSearch] = useState(initialSearch);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Refetch availability and sync bookmarks whenever the user changes the date or time range.
+  // Refetch availability and sync bookmarks whenever the user changes the date or time range.
   useEffect(() => {
-    let cancelled = false;
+    let cancelled = false; 
     setLoading(true);
+    setError(null);
 
-    listCourts()
+    fetchCourtAvailability(search.date, search.timeRange)
       .then((data) => {
-        if (!cancelled) {
-          setCourts(data);
-          setError(null);
-        }
+        if (cancelled) return;
+        setRawCourts(data);
+        
+        // SYNC BOOKMARKS FROM BACKEND RESPONSE
+        setBookmarkedIds((prev) => {
+          const next = new Set(prev);
+          data.forEach((c) => {
+            if (c.bookmarked) next.add(c.id);
+          });
+          return next;
+        });
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -33,19 +51,22 @@ export function CourtsProvider({ children }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [search.date, search.timeRange]);
+  const courts = useMemo(
+    () => rawCourts.map((c) => ({ ...c, bookmarked: bookmarkedIds.has(c.id) })),
+    [rawCourts, bookmarkedIds]
+  );
 
-  // Optimistic update: flip the heart immediately, roll back if the API fails.
   const toggleBookmark = useCallback(
     async (courtId) => {
-      const target = courts.find((c) => c.id === courtId);
-      if (!target) return;
-      const next = !target.bookmarked;
-
+      const next = !bookmarkedIds.has(courtId);
       const apply = (value) =>
-        setCourts((prev) =>
-          prev.map((c) => (c.id === courtId ? { ...c, bookmarked: value } : c))
-        );
+        setBookmarkedIds((prev) => {
+          const copy = new Set(prev);
+          if (value) copy.add(courtId);
+          else copy.delete(courtId);
+          return copy;
+        });
 
       apply(next);
       try {
@@ -55,7 +76,7 @@ export function CourtsProvider({ children }) {
         setError(err.message);
       }
     },
-    [courts]
+    [bookmarkedIds]
   );
 
   const value = { courts, search, setSearch, toggleBookmark, loading, error };

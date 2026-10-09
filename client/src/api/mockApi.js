@@ -30,8 +30,10 @@ function write(rows) {
   return rows
 }
 
-// The mock ignores date/time filters; it always returns every court.
-export async function listCourts() {
+// Same signature as the real one in httpApi.js. The mock ignores the date and
+// time and always returns every court, so changing the pickers in demo mode
+// won't change the availability badges.
+export async function fetchCourtAvailability(date, time) {
   await delay()
   return read().slice()
 }

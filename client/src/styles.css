@@ -326,3 +326,246 @@ a {
   width: 26px;
   height: 26px;
 }
+
+/* ===== Date and time pickers: APPEND this to client/src/styles.css ===== */
+
+.picker {
+  position: relative;
+}
+
+.picker > .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+/* little caret on the pill buttons */
+.picker > .pill::after {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 290px;
+  padding: 16px;
+  background: var(--color-bg);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(8, 87, 42, 0.2);
+}
+
+/* ---------- Calendar ---------- */
+
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-family: var(--font-serif);
+}
+
+.cal-nav {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.cal-nav:hover:not(:disabled) {
+  background: rgba(8, 87, 42, 0.1);
+}
+
+.cal-nav:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.cal-weekday {
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.cal-day {
+  aspect-ratio: 1;
+  min-width: 34px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.cal-day:hover:not(:disabled) {
+  background: rgba(8, 87, 42, 0.1);
+}
+
+.cal-day.today {
+  border-color: var(--color-primary);
+}
+
+.cal-day.selected {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-weight: 700;
+}
+
+.cal-day:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ---------- Time range ---------- */
+
+.time-columns {
+  display: flex;
+  gap: 16px;
+}
+
+.time-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.time-column label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.time-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.time-input:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+/* Invalid is shown with a dashed border + the hint text (no extra colors). */
+.time-input.invalid {
+  border: 1px dashed var(--color-primary);
+}
+
+.time-list {
+  position: relative; /* lets the component measure option offsets */
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  scroll-snap-type: y proximity;
+}
+
+.time-option {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 14px;
+  text-align: center;
+  scroll-snap-align: center;
+}
+
+.time-option:hover {
+  background: rgba(8, 87, 42, 0.1);
+}
+
+.time-option[aria-selected="true"] {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  font-weight: 700;
+}
+
+.picker-hint {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.picker-done {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  color: var(--color-primary-contrast);
+  font-weight: 700;
+}
+
+/* ---------- Loading state for the court list ---------- */
+
+.court-list.is-loading {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* On phones the popover becomes a sheet pinned to the bottom of the screen. */
+@media (max-width: 520px) {
+  .picker-popover {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    min-width: 0;
+  }
+}
+
+/* Hours that can't be picked (e.g. an end time before the start) */
+.time-option:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* BOOK HERE is now a link (<a>), so it needs button-like styling */
+a.book-btn,
+span.book-btn {
+  display: inline-block;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.book-btn.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
