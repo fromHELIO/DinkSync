@@ -9,10 +9,6 @@ export default function Header() {
         <NavLink to="/courts" className={({ isActive }) => (isActive ? "active" : "")}>
           Find Courts
         </NavLink>
-        <span className="divider">|</span>
-        <NavLink to="/bookmarks" className={({ isActive }) => (isActive ? "active" : "")}>
-          Bookmarks
-        </NavLink>
       </nav>
     </header>
   );
