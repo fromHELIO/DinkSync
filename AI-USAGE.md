@@ -32,7 +32,7 @@
 
 ## Where the AI got it wrong
 
-# Scraper Capabilities
+### Scraper Capabilities
 
 - Claude and Gemini were not quite clear on the exact extents the scraper was able of going to in regards to retrieivng court data. I found out mid-development that, with the method It had employed and I was committed to seeing through, was incapable of bypassing certain security measures and layout choices of services like Sports360 and Ground002's proprietary site. As such, I had to go back and change some of the frontend to ensure that these would be accounted for.
 
