@@ -4,7 +4,7 @@ A personal project designed for easily navigating to the courts I regularly visi
 
 **Live site:** https://fromhelio.github.io/DinkSync/
 **API:** https://dinksync-backend.onrender.com
-**Demo video:** (link)
+**Demo video:** https://drive.google.com/file/d/1M9868EHp9eTaJlW_JSJs-Hf3kUMjUxKc/view?usp=drivesdk
 
 ![DinkSync's Find Courts page](docs/assets/dinksync_feature.png)
 
