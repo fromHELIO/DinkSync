@@ -45,3 +45,12 @@
 - It misunderstood what I wanted out of the time and date selectors of the app. While the logic was being progressed through, I noticed that the dates and time were static elements directly copied from my wireframe, not clickable media for real date and time selectors. I had gemini quickly rectify this, but was still bothered that something so obvious was done in that manner. 
 
 ---
+
+## What I Did Myself
+
+### Design and Flow
+- All elements were intentional decisions made by myself. While AI gave assistance in actually building the site, the conceptualization and design of the frontend was made solely by myself and based on what I needed out of DinkSync.
+
+### Content Sourcing
+- The actual courts in the app, their pertinent information, and links to their booking sites were also sourced by me and based on what courts my family and I actually consider when playing pickleball.
+
