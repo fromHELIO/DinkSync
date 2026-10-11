@@ -4,7 +4,8 @@ import courtSources from './courtSources.js';
 import { scrapeAllCourts, ValidationError } from './scraper.js';
 
 const app = express();
-app.use(cors());
+const allowedOrigins = 'https://fromhelio.github.io'
+app.use(cors({origin: allowedOrigins}));
 app.use(express.json());
 
 // --- API Routes ---
